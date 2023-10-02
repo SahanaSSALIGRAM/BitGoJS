@@ -30,11 +30,41 @@ describe('ecdsa tss', function () {
     paillierKeyStub.onCall(1).returns(Promise.resolve(paillierKeyPairs[1]));
     paillierKeyStub.onCall(2).returns(Promise.resolve(paillierKeyPairs[2]));
 
+    const [uyShare1, uyShare2, uyShare3] = [
+      ecdsa.keyShareStep1(1, 2, 3),
+      ecdsa.keyShareStep1(2, 2, 3),
+      ecdsa.keyShareStep1(3, 2, 3),
+    ];
+
+    // Exchange commitments of y_i (uyShare1.comDecomY.commitment, uyShare2.comDecomY.commitment, uyShare3.comDecomY.commitment).
+    // Make sure each party getting commitments from all other parties before proceeding to next step.
+    const yCommitments1 = {};
+    yCommitments1[2] = uyShare2.comDecomY.commitment;
+    yCommitments1[3] = uyShare3.comDecomY.commitment;
+
+    const yCommitments2 = {};
+    yCommitments2[1] = uyShare1.comDecomY.commitment;
+    yCommitments2[3] = uyShare3.comDecomY.commitment;
+
+    const yCommitments3 = {};
+    yCommitments3[1] = uyShare1.comDecomY.commitment;
+    yCommitments3[2] = uyShare2.comDecomY.commitment;
+
     const [keyShare1, keyShare2, keyShare3] = await Promise.all([
-      ecdsa.keyShare(1, 2, 3),
-      ecdsa.keyShare(2, 2, 3),
-      ecdsa.keyShare(3, 2, 3),
+      ecdsa.keyShareStep2(uyShare1),
+      ecdsa.keyShareStep2(uyShare2),
+      ecdsa.keyShareStep2(uyShare3),
     ]);
+
+    // Exchange decommitments of y_i along with NShares.
+    // Verify commitments of y_i received from other parties in keyCombine() below.
+
+    // Populate commitments received earlier before verification.
+    keyShare2.nShares[1].comY = yCommitments1[2];
+    keyShare3.nShares[1].comY = yCommitments1[3];
+
+    keyShare1.nShares[2].comY = yCommitments2[1];
+    keyShare3.nShares[2].comY = yCommitments2[3];
 
     const [keyCombined1, keyCombined2] = [
       ecdsa.keyCombine(keyShare1.pShare, [keyShare2.nShares[1], keyShare3.nShares[1]]),
